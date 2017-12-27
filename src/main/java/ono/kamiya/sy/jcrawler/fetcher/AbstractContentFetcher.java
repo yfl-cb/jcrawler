@@ -44,6 +44,7 @@ abstract class AbstractContentFetcher {
                 result.append(line);
             }
             EntityUtils.consume(entity);
+            Logger.logInfo(String.valueOf(response.getStatusLine().getStatusCode()) + "\n");
             return result.toString();
         } finally {
             response.close();
