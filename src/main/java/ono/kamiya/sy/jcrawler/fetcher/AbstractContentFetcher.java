@@ -34,8 +34,6 @@ abstract class AbstractContentFetcher {
         CloseableHttpResponse response = httpClient.execute(httpGet);
 
         try {
-            // TODO: Log this httpGet attempt
-            Logger.logInfo(httpGet.toString());
             HttpEntity entity = response.getEntity();
             BufferedReader rd = new BufferedReader(new InputStreamReader(entity.getContent()));
             StringBuilder result = new StringBuilder();
@@ -44,7 +42,13 @@ abstract class AbstractContentFetcher {
                 result.append(line);
             }
             EntityUtils.consume(entity);
-            Logger.logInfo(String.valueOf(response.getStatusLine().getStatusCode()) + "\n");
+
+            int statusCode = response.getStatusLine().getStatusCode();
+            Logger.logInfo(String.format("[%d] %s", statusCode, httpGet.toString()));
+
+            if (statusCode != 200) {
+                throw new IOException("GET failed!");
+            }
             return result.toString();
         } finally {
             response.close();

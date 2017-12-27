@@ -56,7 +56,7 @@ public class MyGalgameAnalyzer extends AbstractAnalyzer {
     private GalEntry parseOneEntry(Element entryElement) throws IOException, URISyntaxException {
         GalEntry entry = new GalEntry();
         entry.title = entryElement.attr("title");
-        entry.originalURL = entryElement.attr("href");
+        entry.originalURL = java.net.URLDecoder.decode(entryElement.attr("href"), "UTF-8");
         String galPath = new URL(entry.originalURL).getPath();
         String galEntryPageContent = httpGetOrGetFromFile(galPath, "gals", new WebpageContentFetcher());
         return entry;
@@ -88,6 +88,7 @@ public class MyGalgameAnalyzer extends AbstractAnalyzer {
 
             if (content.equals("")) {
                 Logger.log(EventType.ERROR, String.format("%s: Blank content", file));
+                throw new IOException("Blank content!");
             }
 
             PrintWriter out = new PrintWriter(filePath.toFile());
