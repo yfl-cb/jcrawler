@@ -46,19 +46,25 @@ public class MyGalgameAnalyzer extends AbstractAnalyzer {
         List<GalEntry> entries = new ArrayList<>();
         for (Element link : links.children()) {
             entries.add(parseOneEntry(link.child(0)));
-
-            int randomNum = ThreadLocalRandom.current().nextInt(10, 31);
-            TimeUnit.SECONDS.sleep(randomNum);
         }
         return new Gson().toJson(entries);
     }
 
-    private GalEntry parseOneEntry(Element entryElement) throws IOException, URISyntaxException {
+    private GalEntry parseOneEntry(Element entryElement) throws IOException, URISyntaxException, InterruptedException {
         GalEntry entry = new GalEntry();
         entry.title = entryElement.attr("title");
         entry.originalURL = java.net.URLDecoder.decode(entryElement.attr("href"), "UTF-8");
         String galPath = new URL(entry.originalURL).getPath();
-        String galEntryPageContent = httpGetOrGetFromFile(galPath, "gals", new WebpageContentFetcher());
+
+        Document galEntryPageContent = httpGetOrGetFromFile(galPath, "gals", new WebpageContentFetcher());
+        Element article = galEntryPageContent.getElementsByTag("article").first();
+
+        // Baidu Pan link
+        String resourceURL = article.select("button").attr("onclick");
+        entry.resourceURL = extractResourceURL(resourceURL);
+
+        // Baidu Pan password
+        String pwd = article.select("span").text();
         return entry;
     }
 
@@ -66,8 +72,7 @@ public class MyGalgameAnalyzer extends AbstractAnalyzer {
         WebpageContentFetcher fetcher = new WebpageContentFetcher();
 
         try {
-            String rawData = httpGetOrGetFromFile("sitemap.html", ".", fetcher);
-            Document doc = fetcher.raw2data(rawData);
+            Document doc = httpGetOrGetFromFile("sitemap.html", ".", fetcher);
             return traverseSiteMapLinks(doc);
         } catch (Exception e) {
             e.printStackTrace();
@@ -75,16 +80,18 @@ public class MyGalgameAnalyzer extends AbstractAnalyzer {
         return null;
     }
 
-    private String httpGetOrGetFromFile(String file, String subDirectory, WebpageContentFetcher fetcher)
-            throws IOException, URISyntaxException {
+    private Document httpGetOrGetFromFile(String file, String subDirectory, WebpageContentFetcher fetcher)
+            throws IOException, URISyntaxException, InterruptedException {
         if (subDirectory == null || subDirectory.equals(""))
             subDirectory = ".";
         Path filePath = Paths.get(String.format("%s/%s/%s/%s", this.localResourceRoot, this.resourceDirectory, subDirectory, file));
 
         if (Files.exists(filePath)) {
-            return new String(Files.readAllBytes(filePath), StandardCharsets.UTF_8);
+            Logger.logInfo(String.format("Cached: %s", file));
+            return fetcher.raw2data(new String(Files.readAllBytes(filePath), StandardCharsets.UTF_8));
         } else {
             String content = fetcher.sendGet(scheme, root, "/" + file);
+            Document doc = fetcher.raw2data(content);
 
             if (content.equals("")) {
                 Logger.log(EventType.ERROR, String.format("%s: Blank content", file));
@@ -92,8 +99,26 @@ public class MyGalgameAnalyzer extends AbstractAnalyzer {
             }
 
             PrintWriter out = new PrintWriter(filePath.toFile());
-            out.println(content);
-            return content;
+            out.println(doc);
+            out.close();
+
+            // wait random seconds between 10~30
+            int randomNum = ThreadLocalRandom.current().nextInt(10, 31);
+            TimeUnit.SECONDS.sleep(randomNum);
+
+            return doc;
         }
+    }
+
+    private String extractResourceURL(String url) throws IOException {
+        String rscPrefix = "http://pan.baidu.com/s/";
+        if (!url.contains(rscPrefix))
+            throw new IOException("INVALID RESOURCE URL!");
+
+        String stripped = url.substring(url.indexOf(rscPrefix), url.length() - 1);
+        if (!stripped.endsWith("\'"))
+            throw new IOException("INVALID RESOURCE URL!");
+
+        return stripped.substring(0, stripped.length() - 1);
     }
 }
